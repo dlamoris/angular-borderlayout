@@ -274,7 +274,8 @@
           handle: "@paneHandle",
           closed: "=paneClosed",
           order: "@paneOrder",
-          noToggle: "@paneNoToggle"
+          noToggle: "@paneNoToggle",
+          noScroll: "@paneNoScroll"
         },
         template:
           '<div class="fa-pane pane-{{$pane.id}}">' +
@@ -583,7 +584,8 @@
             $pane.$transcludeScope = $transcludeScope;
 
             return $transclude($transcludeScope, function(clone) {
-              clone.addClass("fa-pane-scroller");
+              if ($attrs.paneNoScroll !== 'true')
+                clone.addClass("fa-pane-scroller");
 
               $el.append(clone);
 
