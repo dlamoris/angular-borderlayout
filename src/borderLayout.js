@@ -19,7 +19,7 @@
   });
 
   module.directive("faPane", [
-    "$window", "$rootScope", '$timeout', "paneManager", function($window, $rootScope, $timeout, paneManager) {
+    "$window", "$rootScope", '$timeout', '$interval', "paneManager", function($window, $rootScope, $timeout, $interval, paneManager) {
 
       var Region = (function() {
         function Region(width, height, top, right, bottom, left) {
@@ -259,44 +259,49 @@
       })();
 
       var setupScrollEvent = function(elementWithScrollbar, elementInsideScrollbar, $scope ) {
-              var thresholdBetweenScrollBarAndBottom = $scope.scrollApi.thresholdBetweenScrollbarAndBottom ?
-                  $scope.scrollApi.thresholdBetweenScrollbarAndBottom: 2000 ;
-              var scrollThrottleRate = $scope.scrollApi.scrollThrottleRate ? $scope.scrollApi.scrollThrottleRate: 500;
-              $scope.scrollApi.isScrollVisible = _isScrollbarVisible;
-              var waiting = false;
+        // This assignment gives access to this method to the client of the library
+        $scope.scrollApi.isScrollVisible = _isScrollbarVisible;
+        var thresholdFromScrollbarAndBottom = $scope.scrollApi.threshold || 2000 ;
+        var scrollThrottleRate = $scope.scrollApi.throttleRate || 500;
+        var frequency = $scope.scrollApi.frequency || 100;
+        var waiting = false;
+        var intervalHandler;
 
-              elementInsideScrollbar.removeAttr('pane-scroll-api');
-              elementWithScrollbar.addEventListener('scroll', _scrollHandler, true);
+        elementInsideScrollbar.removeAttr('pane-scroll-api');
+        elementWithScrollbar.on('wheel', _scrollHandler);
 
-              function _scrollHandler() {
-                  if (waiting) {
-                      return;
-                  }
-                  waiting = true;
-                  $timeout(function() {
-                      // this scrollHeight(total height including the invisible part) changes as more views are added
-                      var totalHeight = elementInsideScrollbar.prop('scrollHeight');
-                      var hiddenContentHeight = totalHeight - elementInsideScrollbar.height();
+        function _scrollHandler() {
+          if (waiting) {
+              return;
+          }
+          waiting = true;
+          // scrolling happens very fast. buffer it using scrollThrottleRate
+          $timeout(function() {
+            intervalHandler = $interval(function() {
+                var totalHeight = elementInsideScrollbar.prop('scrollHeight');
+                var hiddenContentHeight = totalHeight - elementInsideScrollbar.height();
+                if (_isScrollbarAlmostAtTheBottom(hiddenContentHeight)) {
+                    var stopListen = $scope.scrollApi.notifyOnScroll();
+                    if (stopListen) {
+                        elementWithScrollbar.off('wheel', _scrollHandler);
+                        $interval.cancel(intervalHandler);
+                    }
+                } else {
+                    waiting = false;
+                    $interval.cancel(intervalHandler);
+                }
+            }, frequency);
+          }, scrollThrottleRate);
+        }
 
-                      // Scroll is almost at the bottom. Load more one more view
-                      if (_isScrollbarAlmostAtTheBottom(hiddenContentHeight)) {
-                          var shouldStopListeningForScroll = $scope.scrollApi.notifyOnScroll();
-                          if (shouldStopListeningForScroll) {
-                              elementWithScrollbar.removeEventListener('scroll', _scrollHandler, true );
-                          }
-                      }
-                      waiting = false;
-                  }, scrollThrottleRate);
-              }
+        function _isScrollbarVisible() {
+          return elementInsideScrollbar.prop('scrollHeight') > elementInsideScrollbar.height();
+        }
 
-              function _isScrollbarVisible() {
-                  return elementInsideScrollbar.prop('scrollHeight') > elementInsideScrollbar.height();
-              }
-
-              function _isScrollbarAlmostAtTheBottom(hiddenContentHeight) {
-                  return hiddenContentHeight - elementInsideScrollbar.scrollTop() <= thresholdBetweenScrollBarAndBottom;
-              }
-          };
+        function _isScrollbarAlmostAtTheBottom(hiddenContentHeight) {
+          return hiddenContentHeight - elementInsideScrollbar.scrollTop() <= thresholdFromScrollbarAndBottom;
+        }
+      };
 
       // BEGIN DIRECTIVE DECLARATION
       return {
@@ -628,7 +633,7 @@
               if ($attrs.paneNoScroll !== 'true') {
                 clone.addClass("fa-pane-scroller");
                 if ($attrs.paneScrollApi) {
-                  setupScrollEvent($el[0], clone, $scope);
+                  setupScrollEvent($el, clone, $scope);
                 }
               }
 
