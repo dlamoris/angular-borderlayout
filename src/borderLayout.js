@@ -19,7 +19,7 @@
   });
 
   module.directive("faPane", [
-    "$window", "$rootScope", "paneManager", function($window, $rootScope, paneManager) {
+    "$window", "$rootScope", '$timeout', '$interval', "paneManager", function($window, $rootScope, $timeout, $interval, paneManager) {
 
       var Region = (function() {
         function Region(width, height, top, right, bottom, left) {
@@ -258,6 +258,51 @@
         return fun;
       })();
 
+      var setupScrollEvent = function(elementWithScrollbar, elementInsideScrollbar, $scope ) {
+        // This assignment gives access to this method to the client of the library
+        $scope.scrollApi.isScrollVisible = _isScrollbarVisible;
+        var thresholdFromScrollbarAndBottom = $scope.scrollApi.threshold || 2000 ;
+        var scrollThrottleRate = $scope.scrollApi.throttleRate || 500;
+        var frequency = $scope.scrollApi.frequency || 100;
+        var waiting = false;
+        var intervalHandler;
+
+        elementInsideScrollbar.removeAttr('pane-scroll-api');
+        elementWithScrollbar.on('wheel', _scrollHandler);
+
+        function _scrollHandler() {
+          if (waiting) {
+              return;
+          }
+          waiting = true;
+          // scrolling happens very fast. buffer it using scrollThrottleRate
+          $timeout(function() {
+            intervalHandler = $interval(function() {
+                var totalHeight = elementInsideScrollbar.prop('scrollHeight');
+                var hiddenContentHeight = totalHeight - elementInsideScrollbar.height();
+                if (_isScrollbarAlmostAtTheBottom(hiddenContentHeight)) {
+                    var stopListen = $scope.scrollApi.notifyOnScroll();
+                    if (stopListen) {
+                        elementWithScrollbar.off('wheel', _scrollHandler);
+                        $interval.cancel(intervalHandler);
+                    }
+                } else {
+                    waiting = false;
+                    $interval.cancel(intervalHandler);
+                }
+            }, frequency);
+          }, scrollThrottleRate);
+        }
+
+        function _isScrollbarVisible() {
+          return elementInsideScrollbar.prop('scrollHeight') > elementInsideScrollbar.height();
+        }
+
+        function _isScrollbarAlmostAtTheBottom(hiddenContentHeight) {
+          return hiddenContentHeight - elementInsideScrollbar.scrollTop() <= thresholdFromScrollbarAndBottom;
+        }
+      };
+
       // BEGIN DIRECTIVE DECLARATION
       return {
         restrict: "A",
@@ -275,7 +320,8 @@
           closed: "=paneClosed",
           order: "@paneOrder",
           noToggle: "@paneNoToggle",
-          noScroll: "@paneNoScroll"
+          noScroll: "@paneNoScroll",
+          scrollApi: '<paneScrollApi'
         },
         template:
           '<div class="fa-pane pane-{{$pane.id}}">' +
@@ -584,8 +630,12 @@
             $pane.$transcludeScope = $transcludeScope;
 
             return $transclude($transcludeScope, function(clone) {
-              if ($attrs.paneNoScroll !== 'true')
+              if ($attrs.paneNoScroll !== 'true') {
                 clone.addClass("fa-pane-scroller");
+                if ($attrs.paneScrollApi) {
+                  setupScrollEvent($el, clone, $scope);
+                }
+              }
 
               $el.append(clone);
 
