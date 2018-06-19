@@ -268,7 +268,7 @@
         var intervalHandler;
 
         elementInsideScrollbar.removeAttr('pane-scroll-api');
-        elementWithScrollbar.on('wheel', _scrollHandler);
+        elementWithScrollbar.addEventListener('scroll', _scrollHandler, true);
 
         function _scrollHandler() {
           if (waiting) {
@@ -283,7 +283,7 @@
                 if (_isScrollbarAlmostAtTheBottom(hiddenContentHeight)) {
                     var stopListen = $scope.scrollApi.notifyOnScroll();
                     if (stopListen) {
-                        elementWithScrollbar.off('wheel', _scrollHandler);
+                        elementWithScrollbar.removeEventListener('scroll', _scrollHandler, true);
                         $interval.cancel(intervalHandler);
                     }
                 } else {
@@ -633,7 +633,7 @@
               if ($attrs.paneNoScroll !== 'true') {
                 clone.addClass("fa-pane-scroller");
                 if ($attrs.paneScrollApi) {
-                  setupScrollEvent($el, clone, $scope);
+                  setupScrollEvent($el[0], clone, $scope);
                 }
               }
 
